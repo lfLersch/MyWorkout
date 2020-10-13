@@ -11,7 +11,19 @@ class Training{
   }
 
   addExercise(Map m){
-    exercises.add(Exercise(m['name'],m['weight'].toString(),m['repetitions'].toString(),m['series'].toString()));
+    Exercise e;
+    switch(m['type']) {
+      case "Peso":
+        e = WeightExercise(m['name'], "", m['type'], m['muscle_group'],m['repetitions'],m['series'], m['weight']);
+        break;
+      case "Tempo":
+        e = TimeExercise(m['name'], "", m['type'], m['muscle_group'],m['repetitions'],m['series'], m['time']);
+        break;
+      case "Repetições":
+        e = RepetitionsExercise(m['name'], "", m['type'], m['muscle_group'],m['repetitions'],m['series']);
+        break;
+    }
+    exercises.add(e);
   }
 
   toJson(){

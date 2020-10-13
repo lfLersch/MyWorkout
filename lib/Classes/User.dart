@@ -8,6 +8,7 @@ class User{
 
 
   User(this.id, this.name, this.login, this.password);
+  User.inGym(String id, String name) : this.name = name, this.id = id;
 
   addTraining(String key, Map m){
     listTraining.add(Training(key,m['name']));

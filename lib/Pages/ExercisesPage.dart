@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:myworkout/Classes/Exercise.dart';
-import 'dart:convert';
+import 'package:myworkout/Utility/SearchDialog.dart';
 import 'package:myworkout/Classes/User.dart';
 import 'package:myworkout/Classes/Training.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -21,21 +20,66 @@ class ExercisesPage extends StatefulWidget {
 class ExercisesState extends State<ExercisesPage> {
   DatabaseReference workoutsRef;
   bool longPressFlag = false;
-  List<String> indexList = new List();
+  List<int> indexList = new List();
   final databaseReference = Firestore.instance;
   final GlobalKey<ScaffoldState> _scaffoldKey = new GlobalKey<ScaffoldState>();
+
+  bool _isSearching = false;
 
   @override
   void initState() {
     super.initState();
   }
+
   void longPress() {
     setState(() {
-      if (indexList.isEmpty) {
+      if (longPressFlag) {
+        indexList.clear();
         longPressFlag = false;
       } else {
         longPressFlag = true;
       }
+    });
+  }
+
+  List<RawExercise> rawExerciseList = new List();
+
+  void removeExercise() async{
+    final DocumentReference _postsCollectionReference =
+    Firestore.instance.collection('training').document(widget.training.id);
+    int index = indexList.removeLast();
+
+    await _postsCollectionReference.updateData({'exercises':FieldValue.arrayRemove([widget.training.exercises.elementAt(index).toJson()])}).then((doc) {
+      print("l");
+
+      widget.training.exercises.removeAt(index);
+      setState(() {
+
+      });
+    }).timeout(Duration(seconds:10)).catchError((error) {
+      print("Erro ao adicionar exercício");
+      setState(() {
+
+      });
+    });
+        }
+
+  void onTapExercise() async {
+    rawExerciseList = new List();
+    await Firestore.instance
+        .collection("exercises")
+        .getDocuments()
+        .then((QuerySnapshot snapshot) {
+      snapshot.documents.forEach((element) {
+        rawExerciseList.add(new RawExercise(
+            element['name'], element['description'], element['type'], element['muscle_group']));
+      });
+    }).whenComplete(() {
+      showDialog(
+          context: context,
+          builder: (context) {
+            return SearchDialog(rawExerciseList: rawExerciseList, t: widget.training);
+          });
     });
   }
 
@@ -51,77 +95,11 @@ class ExercisesState extends State<ExercisesPage> {
     return Future.value("Data download successfully");
   }
 
-  @override
-  Widget requestTemplate(Exercise e) {
-    return Card(
-      child: new InkWell(
-        onLongPress: (){
-          print(longPressFlag);
-        },
-        onTap: (){
-        },
-      //margin: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0),
-      child: Column(
-        children: <Widget>[
-          new Row(
-            children: <Widget>[
-              Expanded(
-                child: new Padding(
-                  padding: const EdgeInsets.all(5),
-                  child: Text(e.name,
-                      style: TextStyle(
-                        fontSize: 20.0,
-                        color: Colors.black,
-                      )),
-                ),
-              ),
-              Expanded(
-                child: new Padding(
-                  padding: const EdgeInsets.fromLTRB(5, 5, 5, 5),
-                  child: Text(e.weight + " kg",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 20.0,
-                        color: Colors.black,
-                      )),
-                ),
-              ),
-            ],
-          ),
-          new Row(
-            children: <Widget>[
-              Expanded(
-                child: new Padding(
-                  padding: const EdgeInsets.fromLTRB(5, 0, 5, 5),
-                  child: Text(
-                    "obs",
-                    style: TextStyle(
-                      fontSize: 10.0,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: new Padding(
-                  padding: const EdgeInsets.all(5),
-                  child: Text(
-                    "series: " + e.series + "   repetitions: " + e.repetitions,
-                  ),
-                ),
-              ),
-            ],
-          )
-        ],
-      ),
-    ));
-  }
-
   Widget build(BuildContext context) {
     return FutureBuilder<String>(
-      future: getData(), // function where you call your api
-      builder: (BuildContext context, AsyncSnapshot<String> snapshot) {
-        // AsyncSnapshot<Your object type>
+        future: getData(), // function where you call your api
+        builder: (BuildContext context, AsyncSnapshot<String> snapshot) {
+          // AsyncSnapshot<Your object type>
           if (snapshot.hasError)
             return Center(child: Text('Error: ${snapshot.error}'));
           else
@@ -176,26 +154,62 @@ class ExercisesState extends State<ExercisesPage> {
                   },
                 ),
                 title: Text(widget.training.name),
-                actions: [
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
+                actions: (indexList.isNotEmpty)
+                    ?
+                <Widget>[
+              Padding(
+              padding: EdgeInsets.only(right: 16.0),
+                      child: GestureDetector(
+                        onTap: () {
+                          removeExercise();
+                        },
+                        child: Icon(
+                          Icons.delete,
+                          size: 26.0,
+                        ),
                   ),
-                ],
+              )
+                ]
+                    :
+                  <Widget>[
+                      Padding(
+                      padding: EdgeInsets.only(right: 16.0),
+
+                      )
+        ]
               ),
               body: ListView(
-                children: widget.training.exercises
-                    .map((exercise) => CustomWidget(
-                    e: exercise,
-                  longPressEnabled: longPressFlag,
-                  callback: () {
-                    if (indexList.contains(exercise.id)) {
-                      indexList.remove(exercise.id);
-                    } else {
-                      indexList.add(exercise.id);
-                    }
-
-                    longPress();
-                  },))
+                children: widget.training.exercises.asMap().entries
+                    .map((entry) => ExerciseCard(
+                          indexList: indexList,
+                          e: entry.value,
+                          index: entry.key,
+                          longPressEnabled: longPressFlag,
+                          tapCallback: () {
+                            setState(() {
+                              if (indexList.contains(entry.key)) {
+                                indexList.remove(entry.key);
+                                if (indexList.isEmpty) {
+                                  longPressFlag = false;
+                                }
+                              } else {
+                                indexList.add(entry.key);
+                              }
+                            });
+                          },
+                          longCallback: () {
+                            setState(() {
+                              if (indexList.contains(entry.key)) {
+                                indexList.remove(entry.key);
+                                longPressFlag = false;
+                              } else {
+                                indexList.add(entry.key);
+                                //print(entry.key + longPressFlag.toString());
+                                longPressFlag = true;
+                              }
+                            });
+                          },
+                        ))
                     .toList(),
               ),
               floatingActionButton: SpeedDial(
@@ -223,7 +237,7 @@ class ExercisesState extends State<ExercisesPage> {
                       backgroundColor: Colors.green,
                       label: 'Novo Exercício',
                       labelStyle: TextStyle(fontSize: 13.0),
-                      onTap: () => print('FIRST CHILD')),
+                      onTap: onTapExercise),
                   SpeedDialChild(
                     child: Icon(Icons.edit),
                     backgroundColor: Colors.blue,
@@ -241,47 +255,55 @@ class ExercisesState extends State<ExercisesPage> {
                 ],
               ),
             ); // snapshot.data  :- get your object which is pass from your downloadData() function
-        }
-    );
+        });
   }
 }
 
-class CustomWidget extends StatefulWidget {
+
+
+// ignore: must_be_immutable
+class ExerciseCard extends StatefulWidget {
   bool longPressEnabled;
   Exercise e;
-  final VoidCallback callback;
-  CustomWidget({this.e, this.longPressEnabled, this.callback});
+  List<int> indexList;
+  int index;
+  final VoidCallback tapCallback;
+  final VoidCallback longCallback;
 
+  ExerciseCard(
+      {this.e,
+        this.index,
+      this.longPressEnabled,
+      this.tapCallback,
+      this.longCallback,
+      this.indexList});
 
-createState() => new _CustomWidgetState();
+  createState() => new _ExerciseCard();
 }
-class _CustomWidgetState extends State<CustomWidget> {
+
+class _ExerciseCard extends State<ExerciseCard> {
   bool selected = false;
   Color color = Colors.white;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-        color: color,
+        color: (widget.indexList.contains(widget.index))
+            ? Colors.blue
+            : Colors.white,
         child: new InkWell(
-          onLongPress: (){
+          onLongPress: () {
             setState(() {
-              selected = !selected;
+              widget.longCallback();
             });
-            color = Colors.blue;
-            widget.callback();
-
           },
-          onTap: (){
-            if(widget.longPressEnabled){
-              selected = !selected;
-              if(selected) {
-                color = Colors.blue;
-              }else {
-                color = Colors.white;
-              }
-              widget.callback();
-            }
+          onTap: () {
+            print(widget.indexList[0]);
+            if (widget.longPressEnabled) {
+              setState(() {
+                widget.tapCallback();
+              });
+            } else {}
           },
           //margin: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0),
           child: Column(
@@ -301,7 +323,7 @@ class _CustomWidgetState extends State<CustomWidget> {
                   Expanded(
                     child: new Padding(
                       padding: const EdgeInsets.fromLTRB(5, 5, 5, 5),
-                      child: Text(widget.e.weight + " kg",
+                      child: Text(widget.e.principalField(),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 20.0,
@@ -329,7 +351,7 @@ class _CustomWidgetState extends State<CustomWidget> {
                     child: new Padding(
                       padding: const EdgeInsets.all(5),
                       child: Text(
-                        "series: " + widget.e.series + "   repetitions: " + widget.e.repetitions,
+                        widget.e.secondField()
                       ),
                     ),
                   ),

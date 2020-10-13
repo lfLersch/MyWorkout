@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:myworkout/Classes/Exercise.dart';
+import 'dart:convert';
 import 'package:myworkout/Classes/User.dart';
 import 'package:myworkout/Classes/Training.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,15 +9,20 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:myworkout/Pages/ExercisesPage.dart';
 import 'package:myworkout/Pages/ImageBankPage.dart';
 
-class WorkoutsPage extends StatefulWidget {
+class NewExercisePage extends StatefulWidget {
   final User user;
-  WorkoutsPage(this.user);
+  final Training training;
+  NewExercisePage(this.user,this.training);
+
   @override
-  WorkoutsState createState() => WorkoutsState();
+  NewExerciseState createState() => NewExerciseState();
 }
 
-class WorkoutsState extends State<WorkoutsPage> {
+class NewExerciseState extends State<NewExercisePage> {
   DatabaseReference workoutsRef;
+  TextEditingController _searchQueryController = TextEditingController();
+  bool _isSearching = false;
+  String searchQuery = "Search query";
   final databaseReference = Firestore.instance;
   final GlobalKey<ScaffoldState> _scaffoldKey = new GlobalKey<ScaffoldState>();
   @override
@@ -22,23 +30,78 @@ class WorkoutsState extends State<WorkoutsPage> {
     super.initState();
   }
 
-
-  Future<String> getData(Training chosenTraining) async {
-
-    var doc = databaseReference
-        .collection("training")
-        .document(chosenTraining.id)
-        .get()
-        .then((DocumentSnapshot snapshot) {
-          print(snapshot.data['exercises']);
-          snapshot.data['exercises'].forEach((v) => chosenTraining.addExercise(v));
-    });
-
-
-    return Future.value("Data download successfully");
+  Widget _buildSearchField() {
+    return TextField(
+      controller: _searchQueryController,
+      autofocus: true,
+      decoration: InputDecoration(
+        hintText: "Search Data...",
+        border: InputBorder.none,
+        hintStyle: TextStyle(color: Colors.white30),
+      ),
+      style: TextStyle(color: Colors.white, fontSize: 16.0),
+      onChanged: (query) => updateSearchQuery(query),
+    );
   }
 
-  Widget workoutCard(Training t) {
+  List<Widget> _buildActions() {
+    if (_isSearching) {
+      return <Widget>[
+        IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () {
+            if (_searchQueryController == null ||
+                _searchQueryController.text.isEmpty) {
+              Navigator.pop(context);
+              return;
+            }
+            _clearSearchQuery();
+          },
+        ),
+      ];
+    }
+
+    return <Widget>[
+      IconButton(
+        icon: const Icon(Icons.search),
+        onPressed: _startSearch,
+      ),
+    ];
+  }
+
+  void _startSearch() {
+    ModalRoute.of(context)
+        .addLocalHistoryEntry(LocalHistoryEntry(onRemove: _stopSearching));
+
+    setState(() {
+      _isSearching = true;
+    });
+  }
+
+  void updateSearchQuery(String newQuery) {
+    setState(() {
+      searchQuery = newQuery;
+    });
+  }
+
+  void _stopSearching() {
+    _clearSearchQuery();
+
+    setState(() {
+      _isSearching = false;
+    });
+  }
+
+  void _clearSearchQuery() {
+    setState(() {
+      _searchQueryController.clear();
+      updateSearchQuery("");
+    });
+  }
+
+
+  @override
+  Widget requestTemplate(Training t) {
     return Card(
       margin: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0),
       child: Padding(
@@ -46,12 +109,12 @@ class WorkoutsState extends State<WorkoutsPage> {
         child: Column(
           children: <Widget>[
             ListTile(
-            title: Text(t.name),
-            onTap: () {
-              //getData(t);
-              Navigator.of(context).push( new MaterialPageRoute(builder: (context) => new ExercisesPage(widget.user,t)));
-            }
-            //onTapLunch(item.id),
+                title: Text(t.name),
+                onTap: () {
+                  //getData(t);
+                  Navigator.of(context).push( new MaterialPageRoute(builder: (context) => new ExercisesPage(widget.user,t)));
+                }
+              //onTapLunch(item.id),
             ),
           ],
         ),
@@ -110,6 +173,11 @@ class WorkoutsState extends State<WorkoutsPage> {
                 ),
               ),
               appBar: AppBar(
+                leading: _isSearching ? const BackButton() : Container(),
+                title: _isSearching ? _buildSearchField() : Container(),
+                actions: _buildActions(),
+              ),
+              /*appBar: AppBar(
                 leading: IconButton(
                   icon: Icon(
                     Icons.menu,
@@ -125,9 +193,9 @@ class WorkoutsState extends State<WorkoutsPage> {
                     padding: EdgeInsets.symmetric(horizontal: 16),
                   ),
                 ],
-              ),
+              ),*/
               body: ListView(
-                children: widget.user.listTraining.map((training) => workoutCard(training))
+                children: widget.user.listTraining.map((training) => requestTemplate(training))
                     .toList(),
               ),
             ); // snapshot.data  :- get your object which is pass from your downloadData() function
@@ -136,4 +204,3 @@ class WorkoutsState extends State<WorkoutsPage> {
     );
   }
 }
-

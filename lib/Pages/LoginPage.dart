@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:myworkout/Classes/Gym.dart';
 import 'package:myworkout/Classes/Training.dart';
 import 'package:myworkout/Classes/User.dart';
 import 'package:myworkout/Utility/Loading.dart';
@@ -17,18 +18,17 @@ class LoginState extends State<LoginPage> {
   final loginController = TextEditingController();
   final passwordController = TextEditingController();
   final databaseReference = Firestore.instance;
-  User user;
   bool loading = false;
+  int radioGroupValue = 0;
 
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
-  @override
   @override
   void initState() {
     super.initState();
   }
 
-  Route _createRoute() {
+  Route _createRoute(User user) {
     return PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
             WorkoutsPage(user),
@@ -36,7 +36,6 @@ class LoginState extends State<LoginPage> {
           var begin = Offset(1.0, 0.0);
           var end = Offset.zero;
           var curve = Curves.ease;
-
           var tween = Tween(begin: begin, end: end);
           var curvedAnimation = CurvedAnimation(
             parent: animation,
@@ -50,7 +49,7 @@ class LoginState extends State<LoginPage> {
         });
   }
 
-  Future<bool> handleSubmit(String login, String password) async {
+  Future<bool> gymHandleSubmit(String login, String password) async {
     bool f;
     User u;
     await databaseReference
@@ -58,21 +57,24 @@ class LoginState extends State<LoginPage> {
         .where("password", isEqualTo: password)
         .where("login", isEqualTo: login)
         .getDocuments()
-        .then((QuerySnapshot snapshot) {
+        .then((QuerySnapshot snapshot) async{
       if (snapshot.documents.length >= 0) {
         u = User(
             snapshot.documents[0].documentID,
             snapshot.documents[0]['name'],
             snapshot.documents[0]['login'],
             snapshot.documents[0]['password']);
-        snapshot.documents[0]['workouts'].forEach((k, v) {
+        await snapshot.documents[0]['workouts'].forEach((k, v) async {
           Training t = Training(k, v['name']);
-          databaseReference
+          await databaseReference
               .collection("training")
               .document(t.id)
               .get()
               .then((DocumentSnapshot snapshot) {
-            snapshot.data['exercises'].forEach((v) => t.addExercise(v));
+            for (final v in snapshot.data['exercises']) {
+              t.addExercise(v);
+            }
+            //snapshot.data['exercises'].forEach((v) => t.addExercise(v));
             u.listTraining.add(t);
           });
         });
@@ -82,13 +84,54 @@ class LoginState extends State<LoginPage> {
       }
     }).whenComplete(() {
       setState(() {
-        user = u;
         loading = false;
       });
-
     });
 
     return f;
+  }
+
+
+  Future<User> loginSubmit(String login, String password) async {
+    User u;
+    QuerySnapshot querySnapshot = await databaseReference
+        .collection("users")
+        .where("password", isEqualTo: password)
+        .where("login", isEqualTo: login)
+        .getDocuments();
+    if(querySnapshot.documents.length == 0){
+      return u;
+    }else{
+      u = User(
+          querySnapshot.documents[0].documentID,
+          querySnapshot.documents[0]['name'],
+          querySnapshot.documents[0]['login'],
+          querySnapshot.documents[0]['password']);
+      await addWorkouts(querySnapshot.documents[0]['workouts'], u);
+    }
+    return u;
+  }
+
+  Future<void> addWorkouts(document, User u) async{
+    await document.forEach((k, v) async{
+      Training t = Training(k, v['name']);
+      u.listTraining.add(t);
+      DocumentSnapshot snapshot = await databaseReference
+          .collection("training")
+          .document(t.id)
+          .get();
+      for(final v in snapshot.data['exercises']){
+        t.addExercise(v);
+      }
+    });
+  }
+
+
+
+  radioGroupValueChanged(int value){
+    setState(() {
+      radioGroupValue = value;
+    });
   }
 
   @override
@@ -141,6 +184,31 @@ class LoginState extends State<LoginPage> {
                         )),
                     style: TextStyle(fontSize: 20),
                   ),
+                  new Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      new Radio(
+                        value: 0,
+                        groupValue: radioGroupValue,
+                        onChanged: radioGroupValueChanged(0),
+                      ),
+                      new Text(
+                        'Aluno',
+                        style: new TextStyle(fontSize: 16.0),
+                      ),
+                      new Radio(
+                        value: 1,
+                        groupValue: radioGroupValue,
+                        onChanged: radioGroupValueChanged(0),
+                      ),
+                      new Text(
+                        'Academia',
+                        style: new TextStyle(
+                          fontSize: 16.0,
+                        ),
+                      ),
+                    ],
+                  ),
                   SizedBox(
                     height: 20,
                   ),
@@ -173,32 +241,29 @@ class LoginState extends State<LoginPage> {
                                 ),
                                 textAlign: TextAlign.left,
                               ),
-                              /*Container(
-                        child: SizedBox(
-                          child: Image.asset("caminho"),
-                          height: 20,
-                          width: 20,
-                        ),
-                      )*/
+                              /*Container(child: SizedBox(child: Image.asset("caminho"),height: 20,width: 20,), )*/
                             ],
                           ),
                           onPressed: () async {
                             setState(() {
                               loading = true;
                             });
-                            bool login = await handleSubmit(
-                                loginController.text, passwordController.text);
-                            if (loading == false) {
-                              setState(() {
-
+                            if(radioGroupValue == 0){
+                              User user = await loginSubmit(
+                                  loginController.text, passwordController.text).whenComplete((){
                               });
-                              if (login) {
-                                print(user.login);
-                                print(user.id);
-                                print(user.listTraining.length);
-                                Navigator.of(context).push(_createRoute());
+                              if (user != null) {
+                                Navigator.of(context).push(_createRoute(user));
                               }
+                            }else{
+                              /*Gym gym = await loginSubmit(
+                                  loginController.text, passwordController.text).whenComplete((){
+                              });*/
                             }
+
+                            //if (loading == false) {
+
+                            //}
                           }),
                     ),
                   ),
@@ -225,4 +290,6 @@ class LoginState extends State<LoginPage> {
             ),
           );
   }
+
+
 }

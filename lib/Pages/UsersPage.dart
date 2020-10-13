@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:myworkout/Pages/ExercisesPage.dart';
 import 'package:myworkout/Pages/ImageBankPage.dart';
+import 'package:myworkout/Utility/Drawer.dart';
 
 class WorkoutsPage extends StatefulWidget {
   final User user;
@@ -22,22 +23,6 @@ class WorkoutsState extends State<WorkoutsPage> {
     super.initState();
   }
 
-
-  Future<String> getData(Training chosenTraining) async {
-
-    var doc = databaseReference
-        .collection("training")
-        .document(chosenTraining.id)
-        .get()
-        .then((DocumentSnapshot snapshot) {
-          print(snapshot.data['exercises']);
-          snapshot.data['exercises'].forEach((v) => chosenTraining.addExercise(v));
-    });
-
-
-    return Future.value("Data download successfully");
-  }
-
   Widget workoutCard(Training t) {
     return Card(
       margin: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0),
@@ -46,12 +31,12 @@ class WorkoutsState extends State<WorkoutsPage> {
         child: Column(
           children: <Widget>[
             ListTile(
-            title: Text(t.name),
-            onTap: () {
-              //getData(t);
-              Navigator.of(context).push( new MaterialPageRoute(builder: (context) => new ExercisesPage(widget.user,t)));
-            }
-            //onTapLunch(item.id),
+                title: Text(t.name),
+                onTap: () {
+                  //getData(t);
+                  Navigator.of(context).push( new MaterialPageRoute(builder: (context) => new ExercisesPage(widget.user,t)));
+                }
+              //onTapLunch(item.id),
             ),
           ],
         ),
@@ -70,45 +55,7 @@ class WorkoutsState extends State<WorkoutsPage> {
             return Center(child: Text('Error: ${snapshot.error}'));
           else
             return Scaffold(
-              drawer: Drawer(
-                child: ListView(
-                  children: <Widget>[
-                    UserAccountsDrawerHeader(
-                      accountName: Text("Luiz Lersch"),
-                      accountEmail: Text("luiz@mail.com"),
-                      /* currentAccountPicture: new GestureDetector(
-                child: new CircleAvatar(
-                  backgroundImage: AssetImage("lalala"),
-                ),
-
-              ),*/
-                      decoration: BoxDecoration(
-                        image: DecorationImage(
-                            image:
-                            AssetImage("assets/hamburguerBackground.jpg"),
-                            fit: BoxFit.fill),
-                      ),
-                    ),
-                    ListTile(
-                      title: Text("Novo Exercício"),
-                      trailing: Icon(Icons.add),
-                      onTap: () {
-                        Navigator.of(context).push(MaterialPageRoute(
-                            builder: (context) => ImageBankPage()));
-                      },
-                    ),
-                    ListTile(
-                      title: Text("Pedidos"),
-                      trailing: Icon(Icons.list),
-                    ),
-                    ListTile(
-                      title: Text("Close"),
-                      trailing: Icon(Icons.exit_to_app),
-                      onTap: () => Navigator.of(context).pop(),
-                    )
-                  ],
-                ),
-              ),
+              drawer: drawer(context),
               appBar: AppBar(
                 leading: IconButton(
                   icon: Icon(
